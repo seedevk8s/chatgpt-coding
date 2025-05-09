@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>추억의 탱크 게임</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            font-family: 'Arial', sans-serif;
+        }
+        
+        canvas {
+            border: 2px solid #333;
+            background: #fff;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+        }
+        
+        .controls {
+            margin-top: 20px;
+            background: #fff;
+            padding: 10px 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+        }
+        
+        h2 {
+            color: #333;
+        }
+        
+        .key {
+            display: inline-block;
+            background: #e0e0e0;
+            padding: 5px 10px;
+            margin: 0 5px;
+            border-radius: 5px;
+            box-shadow: 0 2px 3px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <h1>추억의 탱크 게임</h1>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    
+    <div class="controls">
+        <h2>조작법</h2>
+        <p><span class="key">←</span> <span class="key">→</span> 방향키로 탱크 이동, <span class="key">Space</span> 키로 발사</p>
+    </div>
+    
+    <script>
+        // 게임 캔버스 설정
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // 플레이어 탱크
+        const player = {
+            x: canvas.width / 2 - 20,
+            y: canvas.height - 60,
+            width: 40,
+            height: 40,
+            speed: 5,
+            color: '#3498db'
+        };
+        
+        // 키 입력 상태
+        const keys = {};
+        
+        // 총알 배열
+        const bullets = [];
+        
+        // 적 탱크 배열
+        const enemies = [];
+        
+        // 게임 상태
+        let score = 0;
+        let gameOver = false;
+        let level = 1;
+        
+        // 키보드 이벤트 리스너
+        document.addEventListener('keydown', (e) => {
+            if (e.key === ' ' && !keys[' ']) {
+                fireBullet();
+            }
+            keys[e.key] = true;
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+        
+        // 총알 발사 함수
+        function fireBullet() {
+            bullets.push({
+                x: player.x + player.width / 2 - 2.5,
+                y: player.y,
+                width: 5,
+                height: 10,
+                speed: 7,
+                color: '#e74c3c',
+                enemy: false
+            });
+        }
+        
+        // 적 탱크 생성 함수
+        function createEnemy() {
+            const enemy = {
+                x: Math.random() * (canvas.width - 30),
+                y: 0,
+                width: 30,
+                height: 30,
+                speed: 1 + Math.random() * level * 0.5,
+                color: '#2ecc71',
+                fireTimer: Math.random() * 100
+            };
+            enemies.push(enemy);
+        }
+        
+        // 게임 요소 업데이트
+        function update() {
+            if (gameOver) return;
+            
+            // 플레이어 이동
+            if (keys['ArrowLeft'] && player.x > 0) {
+                player.x -= player.speed;
+            }
+            if (keys['ArrowRight'] && player.x < canvas.width - player.width) {
+                player.x += player.speed;
+            }
+            
+            // 총알 이동
+            for (let i = 0; i < bullets.length; i++) {
+                // 적군 총알은 아래로, 플레이어 총알은 위로
+                if (bullets[i].enemy) {
+                    bullets[i].y += bullets[i].speed;
+                } else {
+                    bullets[i].y -= bullets[i].speed;
+                }
+                
+                // 화면 밖으로 나간 총알 제거
+                if (bullets[i].y < 0 || bullets[i].y > canvas.height) {
+                    bullets.splice(i, 1);
+                    i--;
+                    continue;
+                }
+                
+                // 플레이어와 적 총알 충돌 체크
+                if (bullets[i].enemy && checkCollision(player, bullets[i])) {
+                    gameOver = true;
+                    break;
+                }
+            }
+            
+            // 적 탱크 이동 및 발사
+            for (let i = 0; i < enemies.length; i++) {
+                enemies[i].y += enemies[i].speed;
+                
+                // 적 탱크 발사 로직
+                enemies[i].fireTimer--;
+                if (enemies[i].fireTimer <= 0 && Math.random() < 0.01 + (level * 0.005)) {
+                    // 적 탱크 발사
+                    bullets.push({
+                        x: enemies[i].x + enemies[i].width / 2 - 2.5,
+                        y: enemies[i].y + enemies[i].height,
+                        width: 5,
+                        height: 10,
+                        speed: 5, // 아래로 발사
+                        color: '#f39c12',
+                        enemy: true
+                    });
+                    enemies[i].fireTimer = 100 + Math.random() * 100;
+                }
+                
+                // 화면 아래로 나간 적 제거 및 게임오버
+                if (enemies[i].y > canvas.height) {
+                    enemies.splice(i, 1);
+                    i--;
+                    gameOver = true;
+                    break;
+                }
+            }
+            
+            // 플레이어 총알과 적 탱크 충돌 감지
+            for (let i = 0; i < bullets.length; i++) {
+                if (bullets[i].enemy) continue; // 적 총알은 건너뜀
+                
+                for (let j = 0; j < enemies.length; j++) {
+                    if (checkCollision(bullets[i], enemies[j])) {
+                        score += 10;
+                        bullets.splice(i, 1);
+                        enemies.splice(j, 1);
+                        i--;
+                        break;
+                    }
+                }
+            }
+            
+            // 레벨 업
+            if (score > level * 100) {
+                level++;
+            }
+            
+            // 적 탱크 생성 (확률 기반)
+            if (Math.random() < 0.02 + (level * 0.005)) {
+                createEnemy();
+            }
+        }
+        
+        // 충돌 감지 함수
+        function checkCollision(obj1, obj2) {
+            return obj1.x < obj2.x + obj2.width &&
+                   obj1.x + obj1.width > obj2.x &&
+                   obj1.y < obj2.y + obj2.height &&
+                   obj1.y + obj1.height > obj2.y;
+        }
+        
+        // 탱크 그리기 함수
+        function drawTank(x, y, width, height, color, isPlayer) {
+            // 탱크 본체
+            ctx.fillStyle = color;
+            ctx.fillRect(x, y, width, height);
+            
+            // 포신 그리기
+            ctx.fillStyle = '#333';
+            if (isPlayer) {
+                // 플레이어의 포신은 위로
+                ctx.fillRect(x + width/2 - 2, y - 10, 4, 10);
+            } else {
+                // 적 탱크의 포신은 아래로
+                ctx.fillRect(x + width/2 - 2, y + height, 4, 10);
+            }
+            
+            // 탱크 디테일
+            ctx.fillStyle = '#333';
+            ctx.fillRect(x, y + height/4, width, height/2);
+            
+            // 탱크 포탑
+            ctx.fillStyle = isPlayer ? '#2980b9' : '#27ae60';
+            ctx.beginPath();
+            ctx.arc(x + width/2, y + height/2, width/4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // 그리기 함수
+        function draw() {
+            // 캔버스 지우기
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 배경
+            ctx.fillStyle = '#f0f0f0';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 플레이어 탱크
+            drawTank(player.x, player.y, player.width, player.height, player.color, true);
+            
+            // 총알
+            for (const bullet of bullets) {
+                ctx.fillStyle = bullet.color;
+                ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+            }
+            
+            // 적 탱크
+            for (const enemy of enemies) {
+                drawTank(enemy.x, enemy.y, enemy.width, enemy.height, enemy.color, false);
+            }
+            
+            // 점수 표시
+            ctx.fillStyle = '#333';
+            ctx.font = '20px Arial';
+            ctx.fillText(`점수: ${score} | 레벨: ${level}`, 10, 30);
+            
+            // 게임 오버 메시지
+            if (gameOver) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                ctx.fillStyle = 'white';
+                ctx.font = '40px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('게임 오버!', canvas.width/2, canvas.height/2);
+                
+                ctx.font = '24px Arial';
+                ctx.fillText(`최종 점수: ${score}`, canvas.width/2, canvas.height/2 + 50);
+                
+                ctx.font = '18px Arial';
+                ctx.fillText('스페이스바를 눌러 다시 시작', canvas.width/2, canvas.height/2 + 90);
+            }
+        }
+        
+        // 게임 재시작
+        function restart() {
+            player.x = canvas.width / 2 - 20;
+            bullets.length = 0;
+            enemies.length = 0;
+            score = 0;
+            gameOver = false;
+            level = 1;
+        }
+        
+        // 게임 루프
+        function gameLoop() {
+            if (gameOver && keys[' ']) {
+                restart();
+            }
+            
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // 게임 시작
+        gameLoop();
+    </script>
+</body>
+</html>
